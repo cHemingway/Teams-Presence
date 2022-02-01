@@ -52,7 +52,6 @@ try:
 	from time import sleep
 	from datetime import datetime, time
 	from signal import signal, SIGINT
-	from gpiozero import CPUTemperature
 	import pyqrcode
 except ModuleNotFoundError as ex:
 	printerror("The app could not be started.")
@@ -425,17 +424,10 @@ def Authorize():
 		return False
 
 def printHeader():
-	# Get CPU temp
-	cpu = CPUTemperature()
-
-	os.system('clear')
 	print("============================================")
 	print("            MSFT Teams Presence")
 	print("============================================")
 	print()
-	cpu_r = round(cpu.temperature, 2)
-	print("Current CPU:\t\t" + str(cpu_r) + "°C")
-
 
 # Check for Weekend
 def check_weekend():
