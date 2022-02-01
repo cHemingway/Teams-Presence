@@ -2,6 +2,8 @@
 Originally from https://github.com/maxi07/Teams-Presence, forked to work with a simple USB light tower interface instead.
 90% of the work is from maxi07, thanks!
 
+Note: To find Tenant ID, you can use https://www.whatismytenantid.com/
+
 ## Changes
 
 - Sends the following over a serial port instead
