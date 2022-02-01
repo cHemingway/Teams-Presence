@@ -1,4 +1,22 @@
-# Teams Presence for Raspberry Pi
+# Teams Presence on USB Light Tower
+Originally from https://github.com/maxi07/Teams-Presence, forked to work with a simple USB light tower interface instead.
+90% of the work is from maxi07, thanks!
+
+## Changes
+
+- Sends the following over a serial port instead
+   - 'r' red
+   - 'g' green
+   - 'y' yellow
+   - 'o' off 
+- Any code dealing with the raspberry pi or the Unicorn pHat specifically has been removed
+- Removed setting brightness, as my light tower doesn't support this
+- No longer flashes LEDs on failure
+- Pink is mapped to off, as I only have green/orange/red colors
+- Removed update checking
+- Removed check for running as root, as no longer need it
+
+# Original README (images removed)
 [![PyPI license](https://img.shields.io/pypi/l/ansicolortags.svg)](https://pypi.python.org/pypi/ansicolortags/)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/maxi07/Teams-Presence)
 ![GitHub repo size](https://img.shields.io/github/repo-size/maxi07/Teams-Presence)
@@ -12,8 +30,6 @@ It supports a variety of [presence types](https://docs.microsoft.com/de-de/graph
    - and a lot more!
 
 The Python script pulls the Microsoft Teams presence by using the [Microsoft Graph API](https://docs.microsoft.com/de-de/graph/overview) every 30 seconds and prints the result to console. The presence object will then be converted to a color, which is displayed with the pHAT.
-
-<img src="https://raw.githubusercontent.com/maxi07/Teams-Presence/master/doc/teams-presence.gif" align="center" width="800"/>
 
 ## Features
 The script includes the checked features, while others are planned:

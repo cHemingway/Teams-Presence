@@ -1,6 +1,7 @@
 ##!/usr/bin/env python
 # Python script to show Teams presence status on led
 # Author: Maximilian Krause
+# Edited by Chris Hemingway to use a USB light tower instead
 # Date 29.05.2021
 
 # Define Error Logging
@@ -25,11 +26,6 @@ def printblue(msg):
 def printblink(msg):
 	print('\033[5m' + str(msg) + '\033[0m')
 
-import os
-if not os.geteuid() == 0:
-	printerror("Please run this script with sudo.")
-	exit(2)
-
 print("Welcome to Microsoft Teams presence for Pi!")
 print("Loading modules...")
 
@@ -45,15 +41,14 @@ try:
 	import configparser
 	from urllib.error import HTTPError
 	import json
-	import unicornhat as unicorn
 	import threading
 	import sys
 	import urllib.parse
 	from time import sleep
 	from datetime import datetime, time
 	from signal import signal, SIGINT
-	from gpiozero import CPUTemperature
 	import pyqrcode
+	import serial
 except ModuleNotFoundError as ex:
 	printerror("The app could not be started.")
 	printerror("Please run 'sudo ./install.sh' first.")
@@ -97,7 +92,6 @@ workday_end = time(19)
 workdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 width = 0
 height = 0
-blinkThread = None
 after_work = False
 globalRed = 0
 globalGreen = 0
@@ -105,26 +99,23 @@ globalBlue = 0
 token=''
 points = []
 fullname = ''
-brightness_led = 0.5
 sleepValue = 30 # seconds
+serial_port = "COM8"
+ser = None # Serial port object
 # #############
 
 # Check for arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("--version", "-v", help="Prints the version", action="store_true")
 parser.add_argument("--refresh", "-r", help="Sets the refresh value in seconds", type=int)
-parser.add_argument("--brightness", "-b", help="Sets the brightness of the LED display. Value must be between 0.1 and 1", type=int)
 parser.add_argument("--afterwork", "-aw", help="Check for presence after working hours", action="store_true")
-parser.add_argument("--nopulse", "-np", help="Disables pulsing, if after work hours", action="store_true")
 parser.add_argument("--weekend", "-w", help="Also checks on weekends", action="store_true")
+parser.add_argument("--port","-p",help="Specify what serial port to use, default is {}".format(serial_port),type="str")
 
 args = parser.parse_args()
 if args.version:
 	print(str(version))
 	exit(0)
-
-if args.nopulse:
-	printwarning("Option: No pulsing")
 
 if args.refresh:
 	if args.refresh < 10:
@@ -133,36 +124,22 @@ if args.refresh:
 	sleep = args.refresh
 	printwarning("Option: Sleep set to " + str(sleep))
 
-if args.brightness:
-	if args.brightness < 0.1 and args.brightness > 1:
-		printerror("Value must be between 0.1 and 1")
-		exit(5)
-	brightness = args.brightness
-	printwarning("Option: Brightness set to " + str(brightness))
-
 if args.weekend:
 	printwarning("Option: Set weekend checks to true")
 
 if args.afterwork:
 	printwarning("Option: Set after work to true")
 
+if args.port:
+	serial_port = args.port
+
 #Handles Ctrl+C
 def handler(signal_received, frame):
 	# Handle any cleanup here
 	print()
 	printwarning('SIGINT or CTRL-C detected. Please wait until the service has stopped.')
-	blinkThread.do_run = False
-	blinkThread.join()
 	switchOff()
 	exit(0)
-
-# Disable Printing
-def blockPrint():
-    sys.stdout = open(os.devnull, 'w')
-
-# Restore Printing
-def enablePrint():
-    sys.stdout = sys.__stdout__
 
 # Check times
 def is_time_between(begin_time, end_time, check_time=None):
@@ -200,167 +177,28 @@ def is_connected():
         pass
     return False
 
-# Checks for updates
-def checkUpdate():
-	updateUrl = "https://raw.githubusercontent.com/maxi07/Teams-Presence/master/doc/version"
-	try:
-		f = requests.get(updateUrl, timeout=10)
-		latestVersion = float(f.text)
-		if latestVersion > version:
-			printwarning("There is an update available.")
-			printwarning("Head over to https://github.com/maxi07/Teams-Presence to get the latest features.")
-		else:
-			print("Application is running latest version.")
-	except Exception as e:
-		printerror("An error occured while searching for updates.")
-		printerror(e)
 
 # ############################
-#        UNICORN SETUP
+#        Light Beacon Output
 # ############################
-def setColor(r, g, b, brightness, speed) :
-	global crntColors, globalBlue, globalGreen, globalRed
-	globalRed = r
-	globalGreen = g
-	globalBlue = b
-
-	if brightness == '' :
-		unicorn.brightness(brightness_led)
-
-	for y in range(height):
-		for x in range(width):
-			unicorn.set_pixel(x, y, r, g, b)
-			unicorn.show()
-
-def pulse():
-	for b in range(0, 7):
-		blockPrint()
-		unicorn.brightness(b/10)
-		enablePrint()
-		for y in range(height):
-			for x in range(width):
-				unicorn.set_pixel(x, y, 102, 255, 255)
-				unicorn.show()
-		sleep(0.05)
-	sleep(1)
-	for b in range(6, 0, -1):
-		blockPrint()
-		unicorn.brightness(b/10)
-		enablePrint()
-		for y in range(height):
-			for x in range(width):
-				unicorn.set_pixel(x, y, 102, 255, 255)
-				unicorn.show()
-		sleep(0.05)
-
 def switchBlue() :
-	red = 0
-	green = 0
-	blue = 250
-	blinkThread = threading.Thread(target=setColor, args=(red, green, blue, '', ''))
-	blinkThread.do_run = True
-	blinkThread.start()
+	# Unknown, so yellow?
+	switchYellow()
 
 def switchRed() :
-	red = 250
-	green = 0
-	blue = 0
-	blinkThread = threading.Thread(target=setColor, args=(red, green, blue, '', ''))
-	blinkThread.do_run = True
-	blinkThread.start()
+	ser.write('r')
 
 def switchGreen() :
-	red = 0
-	green = 250
-	blue = 0
-	blinkThread = threading.Thread(target=setColor, args=(red, green, blue, '', ''))
-	blinkThread.do_run = True
-	blinkThread.start()
+	ser.write('g')
 
 def switchPink() :
-	red = 255
-	green = 108
-	blue = 180
-	blinkThread = threading.Thread(target=setColor, args=(red, green, blue, '', ''))
-	blinkThread.do_run = True
-	blinkThread.start()
+	switchOff()
 
 def switchYellow() :
-	red = 255
-	green = 255
-	blue = 0
-	blinkThread = threading.Thread(target=setColor, args=(red, green, blue, '', ''))
-	blinkThread.do_run = True
-	blinkThread.start()
+	ser.write('y')
 
 def switchOff() :
-	global blinkThread, globalBlue, globalGreen, globalRed
-	globalRed = 0
-	globalGreen = 0
-	globalBlue = 0
-	if blinkThread != None :
-		blinkThread.do_run = False
-	unicorn.clear()
-	unicorn.off()
-
-class LightPoint:
-
-	def __init__(self):
-		self.direction = randint(1, 4)
-		if self.direction == 1:
-			self.x = randint(0, width - 1)
-			self.y = 0
-		elif self.direction == 2:
-			self.x = 0
-			self.y = randint(0, height - 1)
-		elif self.direction == 3:
-			self.x = randint(0, width - 1)
-			self.y = height - 1
-		else:
-			self.x = width - 1
-			self.y = randint(0, height - 1)
-
-		self.colour = []
-		for i in range(0, 3):
-			self.colour.append(randint(100, 255))
-
-
-def update_positions():
-
-	for point in points:
-		if point.direction == 1:
-			point.y += 1
-			if point.y > height - 1:
-				points.remove(point)
-		elif point.direction == 2:
-			point.x += 1
-			if point.x > width - 1:
-				points.remove(point)
-		elif point.direction == 3:
-			point.y -= 1
-			if point.y < 0:
-				points.remove(point)
-		else:
-			point.x -= 1
-			if point.x < 0:
-				points.remove(point)
-
-
-def plot_points():
-
-	unicorn.clear()
-	for point in points:
-		unicorn.set_pixel(point.x, point.y, point.colour[0], point.colour[1], point.colour[2])
-	unicorn.show()
-
-def blinkRandom(arg):
-	t = threading.currentThread()
-	while getattr(t, "do_run", True):
-		if len(points) < 10 and randint(0, 5) > 1:
-			points.append(LightPoint())
-		plot_points()
-		update_positions()
-		sleep(0.03)
+	ser.write('o')
 
 ##################################################
 
@@ -425,24 +263,13 @@ def Authorize():
 		return False
 
 def printHeader():
-	# Get CPU temp
-	cpu = CPUTemperature()
-
-	os.system('clear')
 	print("============================================")
 	print("            MSFT Teams Presence")
 	print("============================================")
 	print()
-	cpu_r = round(cpu.temperature, 2)
-	print("Current CPU:\t\t" + str(cpu_r) + "°C")
-
 
 # Check for Weekend
 def check_weekend():
-	# Stop random blinking
-	blinkThread.do_run = False
-	blinkThread.join()
-
 	now = datetime.now()
 
 	# Check for weekend option
@@ -454,12 +281,7 @@ def check_weekend():
 		now = datetime.now()
 		print("It's " + now.strftime("%A") + ", weekend! Grab more beer! \N{beer mug}")
 		print()
-		if args.nopulse:
-			switchOff()
-		else:
-			pulsethread = threading.Thread(target=pulse)
-			pulsethread.start()
-
+		switchOff()
 		countdown(30)
 
 
@@ -468,21 +290,12 @@ def check_workingtimes():
 	if args.afterwork:
 		return
 
-	# Get CPU temp
-	cpu = CPUTemperature()
-
 	while is_time_between(workday_start, workday_end) == False:
 		printHeader()
 		now = datetime.now()
 		print("Work is over for today, grab a beer! \N{beer mug}")
 		print()
-
-		if args.nopulse:
-			switchOff()
-		else:
-			pulsethread = threading.Thread(target=pulse)
-			pulsethread.start()
-
+		switchOff()
 		countdown(30)
 
 
@@ -492,25 +305,18 @@ if __name__ == '__main__':
 	# Tell Python to run the handler() function when SIGINT is recieved
 	signal(SIGINT, handler)
 
+	# Setup the serial port. No need to set baudrate for our device (as "fake" USB-Serial)
+	print("Opening serial port {}".format(serial_port))
+	try:
+		ser = serial.Serial(port=serial_port, timeout=1)
+	except serial.SerialException as e:
+		print(e)
+		exit(3)
+
 	# Check internet
 	if is_connected == False:
 		printerror("No network. Please connect to the internet and restart the app.")
 		exit(3)
-
-	# Check for updates
-	checkUpdate()
-
-	# Setup Unicorn light
-	setColor(50, 50, 50, 1, '')
-	unicorn.set_layout(unicorn.AUTO)
-	unicorn.brightness(0.5)
-
-	# Get the width and height of the hardware
-	width, height = unicorn.get_shape()
-
-	blinkThread = threading.Thread(target=blinkRandom, args=("task",))
-	blinkThread.do_run = True
-	blinkThread.start()
 
 	trycount = 0
 	while Authorize() == False:
@@ -524,9 +330,6 @@ if __name__ == '__main__':
 			continue
 
 	sleep(1)
-	# Stop random blinking
-	blinkThread.do_run = False
-	blinkThread.join()
 
 	trycount = 0
 
@@ -559,10 +362,6 @@ if __name__ == '__main__':
 				printerror("MS Graph URL is invalid!")
 				exit(5)
 			elif err.response.status_code == 401:
-				blinkThread = threading.Thread(target=blinkRandom, args=("task",))
-				blinkThread.do_run = True
-				blinkThread.start()
-
 				trycount = trycount + 1
 				printerror("MS Graph is not authorized. Please reauthorize the app (401). Trial count: " + str(trycount))
 				print()
@@ -585,33 +384,16 @@ if __name__ == '__main__':
 			countdown(5)
 			continue
 
-		# Stop random blinking
-		if blinkThread != None :
-			blinkThread.do_run = False
-			blinkThread.join()
-
-		# Get CPU temp
-		cpu = CPUTemperature()
-
 		# Print to display
-		os.system('clear')
 		print("============================================")
 		print("            MSFT Teams Presence")
 		print("============================================")
 		print()
 		now = datetime.now()
 		print("Last API call:\t\t" + now.strftime("%Y-%m-%d %H:%M:%S"))
-		cpu_r = round(cpu.temperature, 2)
-		print("Current CPU:\t\t" + str(cpu_r) + "°C")
-
-		if args.brightness:
-			printwarning("Option:\t\t\t" + "Set brightness to " + str(brightness))
 
 		if args.refresh:
 			printwarning("Option:\t\t\t" +  "Set refresh to " + str(sleepValue))
-
-		if args.nopulse:
-			printwarning("Option:\t\t\t" + "Pulsing disabled")
 
 		if args.afterwork:
 			printwarning("Option:\t\t\t" + "Set display after work to True")
@@ -621,8 +403,6 @@ if __name__ == '__main__':
 
 		print("User:\t\t\t" + fullname)
 
-
-
 		if jsonresult['activity'] == "Available":
 			print("Teams presence:\t\t" + '\033[32m' + "Available" + '\033[0m')
 			switchGreen()
@@ -630,41 +410,41 @@ if __name__ == '__main__':
 			print("Teams presence:\t\t" + '\033[31m' + "In a call" + '\033[0m')
 			switchRed()
 		elif jsonresult['activity'] == "Away":
-                        print("Teams presence:\t\t" + '\033[33m' + "Away" + '\033[0m')
-                        switchYellow()
+						print("Teams presence:\t\t" + '\033[33m' + "Away" + '\033[0m')
+						switchYellow()
 		elif jsonresult['activity'] == "BeRightBack":
-                        print("Teams presence:\t\t" + '\033[33m' + "Be Right Back" + '\033[0m')
-                        switchYellow()
+						print("Teams presence:\t\t" + '\033[33m' + "Be Right Back" + '\033[0m')
+						switchYellow()
 		elif jsonresult['activity'] == "Busy":
-                        print("Teams presence:\t\t" + '\033[31m' + "Busy" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "Busy" + '\033[0m')
+						switchRed()
 		elif jsonresult['activity'] == "InAConferenceCall":
-                        print("Teams presence:\t\t" + '\033[31m' + "In a conference call" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "In a conference call" + '\033[0m')
+						switchRed()
 		elif jsonresult['activity'] == "DoNotDisturb":
-                        print("Teams presence:\t\t" + '\033[31m' + "Do Not Disturb" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "Do Not Disturb" + '\033[0m')
+						switchRed()
 		elif jsonresult['activity'] == "Offline":
 			print("Teams presence:\t\t" + "Offline")
 			switchPink()
 		elif jsonresult['activity'] == "Inactive":
-                        print("Teams presence:\t\t" + '\033[33m' + "Inactive" + '\033[0m')
-                        switchYellow()
+						print("Teams presence:\t\t" + '\033[33m' + "Inactive" + '\033[0m')
+						switchYellow()
 		elif jsonresult['activity'] == "InAMeeting":
-                        print("Teams presence:\t\t" + '\033[31m' + "In a meeting" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "In a meeting" + '\033[0m')
+						switchRed()
 		elif jsonresult['activity'] == "OffWork":
-                        print("Teams presence:\t\t" + '\033[35m' + "Off work" + '\033[0m')
-                        switchPink()
+						print("Teams presence:\t\t" + '\033[35m' + "Off work" + '\033[0m')
+						switchPink()
 		elif jsonresult['activity'] == "OutOfOffice":
-                        print("Teams presence:\t\t" + '\033[35m' + "Out of office" + '\033[0m')
-                        switchPink()
+						print("Teams presence:\t\t" + '\033[35m' + "Out of office" + '\033[0m')
+						switchPink()
 		elif jsonresult['activity'] == "Presenting":
-                        print("Teams presence:\t\t" + '\033[31m' + "Presenting" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "Presenting" + '\033[0m')
+						switchRed()
 		elif jsonresult['activity'] == "UrgentInterruptionsOnly":
-                        print("Teams presence:\t\t" + '\033[31m' + "Urgent interruptions only" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "Urgent interruptions only" + '\033[0m')
+						switchRed()
 		else:
 			print("Teams presence:\t\t" + "Unknown")
 			switchBlue()
