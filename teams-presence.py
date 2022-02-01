@@ -1,6 +1,7 @@
 ##!/usr/bin/env python
 # Python script to show Teams presence status on led
 # Author: Maximilian Krause
+# Edited by Chris Hemingway to use a USB light tower instead
 # Date 29.05.2021
 
 # Define Error Logging
