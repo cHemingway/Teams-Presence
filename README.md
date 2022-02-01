@@ -10,8 +10,10 @@ Originally from https://github.com/maxi07/Teams-Presence, forked to work with a 
    - 'y' yellow
    - 'o' off 
 - Any code dealing with the raspberry pi or the Unicorn pHat specifically has been removed
+- Removed setting brightness, as my light tower doesn't support this
 - No longer flashes LEDs on failure
 - Pink is mapped to off, as I only have green/orange/red colors
+- Removed update checking
 
 # Original README (images removed)
 

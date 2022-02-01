@@ -190,20 +190,6 @@ def is_connected():
         pass
     return False
 
-# Checks for updates
-def checkUpdate():
-	updateUrl = "https://raw.githubusercontent.com/maxi07/Teams-Presence/master/doc/version"
-	try:
-		f = requests.get(updateUrl, timeout=10)
-		latestVersion = float(f.text)
-		if latestVersion > version:
-			printwarning("There is an update available.")
-			printwarning("Head over to https://github.com/maxi07/Teams-Presence to get the latest features.")
-		else:
-			print("Application is running latest version.")
-	except Exception as e:
-		printerror("An error occured while searching for updates.")
-		printerror(e)
 
 # ############################
 #        Light Beacon Output
@@ -338,9 +324,6 @@ if __name__ == '__main__':
 	if is_connected == False:
 		printerror("No network. Please connect to the internet and restart the app.")
 		exit(3)
-
-	# Check for updates
-	checkUpdate()
 
 	trycount = 0
 	while Authorize() == False:
