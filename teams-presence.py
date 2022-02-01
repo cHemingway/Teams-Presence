@@ -104,7 +104,6 @@ globalBlue = 0
 token=''
 points = []
 fullname = ''
-brightness_led = 0.5
 sleepValue = 30 # seconds
 # #############
 
@@ -112,7 +111,6 @@ sleepValue = 30 # seconds
 parser = argparse.ArgumentParser()
 parser.add_argument("--version", "-v", help="Prints the version", action="store_true")
 parser.add_argument("--refresh", "-r", help="Sets the refresh value in seconds", type=int)
-parser.add_argument("--brightness", "-b", help="Sets the brightness of the LED display. Value must be between 0.1 and 1", type=int)
 parser.add_argument("--afterwork", "-aw", help="Check for presence after working hours", action="store_true")
 parser.add_argument("--nopulse", "-np", help="Disables pulsing, if after work hours", action="store_true")
 parser.add_argument("--weekend", "-w", help="Also checks on weekends", action="store_true")
@@ -131,13 +129,6 @@ if args.refresh:
 		exit(4)
 	sleep = args.refresh
 	printwarning("Option: Sleep set to " + str(sleep))
-
-if args.brightness:
-	if args.brightness < 0.1 and args.brightness > 1:
-		printerror("Value must be between 0.1 and 1")
-		exit(5)
-	brightness = args.brightness
-	printwarning("Option: Brightness set to " + str(brightness))
 
 if args.weekend:
 	printwarning("Option: Set weekend checks to true")
@@ -424,9 +415,6 @@ if __name__ == '__main__':
 		print()
 		now = datetime.now()
 		print("Last API call:\t\t" + now.strftime("%Y-%m-%d %H:%M:%S"))
-
-		if args.brightness:
-			printwarning("Option:\t\t\t" + "Set brightness to " + str(brightness))
 
 		if args.refresh:
 			printwarning("Option:\t\t\t" +  "Set refresh to " + str(sleepValue))
