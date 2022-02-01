@@ -53,6 +53,7 @@ try:
 	from datetime import datetime, time
 	from signal import signal, SIGINT
 	import pyqrcode
+	import serial
 except ModuleNotFoundError as ex:
 	printerror("The app could not be started.")
 	printerror("Please run 'sudo ./install.sh' first.")
@@ -96,7 +97,6 @@ workday_end = time(19)
 workdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 width = 0
 height = 0
-blinkThread = None
 after_work = False
 globalRed = 0
 globalGreen = 0
@@ -105,6 +105,8 @@ token=''
 points = []
 fullname = ''
 sleepValue = 30 # seconds
+serial_port = "COM8"
+ser = None # Serial port object
 # #############
 
 # Check for arguments
@@ -112,16 +114,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--version", "-v", help="Prints the version", action="store_true")
 parser.add_argument("--refresh", "-r", help="Sets the refresh value in seconds", type=int)
 parser.add_argument("--afterwork", "-aw", help="Check for presence after working hours", action="store_true")
-parser.add_argument("--nopulse", "-np", help="Disables pulsing, if after work hours", action="store_true")
 parser.add_argument("--weekend", "-w", help="Also checks on weekends", action="store_true")
+parser.add_argument("--port","-p",help="Specify what serial port to use, default is {}".format(serial_port),type="str")
 
 args = parser.parse_args()
 if args.version:
 	print(str(version))
 	exit(0)
-
-if args.nopulse:
-	printwarning("Option: No pulsing")
 
 if args.refresh:
 	if args.refresh < 10:
@@ -136,23 +135,16 @@ if args.weekend:
 if args.afterwork:
 	printwarning("Option: Set after work to true")
 
+if args.port:
+	serial_port = args.port
+
 #Handles Ctrl+C
 def handler(signal_received, frame):
 	# Handle any cleanup here
 	print()
 	printwarning('SIGINT or CTRL-C detected. Please wait until the service has stopped.')
-	blinkThread.do_run = False
-	blinkThread.join()
 	switchOff()
 	exit(0)
-
-# Disable Printing
-def blockPrint():
-    sys.stdout = open(os.devnull, 'w')
-
-# Restore Printing
-def enablePrint():
-    sys.stdout = sys.__stdout__
 
 # Check times
 def is_time_between(begin_time, end_time, check_time=None):
@@ -194,26 +186,24 @@ def is_connected():
 # ############################
 #        Light Beacon Output
 # ############################
-def pulse():
-	pass
-
 def switchBlue() :
-	pass
+	# Unknown, so yellow?
+	switchYellow()
 
 def switchRed() :
-	pass
+	ser.write('r')
 
 def switchGreen() :
-	pass
+	ser.write('g')
 
 def switchPink() :
-	pass
+	switchOff()
 
 def switchYellow() :
-	pass
+	ser.write('y')
 
 def switchOff() :
-	pass
+	ser.write('o')
 
 ##################################################
 
@@ -320,6 +310,14 @@ if __name__ == '__main__':
 	# Tell Python to run the handler() function when SIGINT is recieved
 	signal(SIGINT, handler)
 
+	# Setup the serial port. No need to set baudrate for our device (as "fake" USB-Serial)
+	print("Opening serial port {}".format(serial_port))
+	try:
+		ser = serial.Serial(port=serial_port, timeout=1)
+	except serial.SerialException as e:
+		print(e)
+		exit(3)
+
 	# Check internet
 	if is_connected == False:
 		printerror("No network. Please connect to the internet and restart the app.")
@@ -410,8 +408,6 @@ if __name__ == '__main__':
 
 		print("User:\t\t\t" + fullname)
 
-
-
 		if jsonresult['activity'] == "Available":
 			print("Teams presence:\t\t" + '\033[32m' + "Available" + '\033[0m')
 			switchGreen()
@@ -419,41 +415,41 @@ if __name__ == '__main__':
 			print("Teams presence:\t\t" + '\033[31m' + "In a call" + '\033[0m')
 			switchRed()
 		elif jsonresult['activity'] == "Away":
-                        print("Teams presence:\t\t" + '\033[33m' + "Away" + '\033[0m')
-                        switchYellow()
+						print("Teams presence:\t\t" + '\033[33m' + "Away" + '\033[0m')
+						switchYellow()
 		elif jsonresult['activity'] == "BeRightBack":
-                        print("Teams presence:\t\t" + '\033[33m' + "Be Right Back" + '\033[0m')
-                        switchYellow()
+						print("Teams presence:\t\t" + '\033[33m' + "Be Right Back" + '\033[0m')
+						switchYellow()
 		elif jsonresult['activity'] == "Busy":
-                        print("Teams presence:\t\t" + '\033[31m' + "Busy" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "Busy" + '\033[0m')
+						switchRed()
 		elif jsonresult['activity'] == "InAConferenceCall":
-                        print("Teams presence:\t\t" + '\033[31m' + "In a conference call" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "In a conference call" + '\033[0m')
+						switchRed()
 		elif jsonresult['activity'] == "DoNotDisturb":
-                        print("Teams presence:\t\t" + '\033[31m' + "Do Not Disturb" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "Do Not Disturb" + '\033[0m')
+						switchRed()
 		elif jsonresult['activity'] == "Offline":
 			print("Teams presence:\t\t" + "Offline")
 			switchPink()
 		elif jsonresult['activity'] == "Inactive":
-                        print("Teams presence:\t\t" + '\033[33m' + "Inactive" + '\033[0m')
-                        switchYellow()
+						print("Teams presence:\t\t" + '\033[33m' + "Inactive" + '\033[0m')
+						switchYellow()
 		elif jsonresult['activity'] == "InAMeeting":
-                        print("Teams presence:\t\t" + '\033[31m' + "In a meeting" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "In a meeting" + '\033[0m')
+						switchRed()
 		elif jsonresult['activity'] == "OffWork":
-                        print("Teams presence:\t\t" + '\033[35m' + "Off work" + '\033[0m')
-                        switchPink()
+						print("Teams presence:\t\t" + '\033[35m' + "Off work" + '\033[0m')
+						switchPink()
 		elif jsonresult['activity'] == "OutOfOffice":
-                        print("Teams presence:\t\t" + '\033[35m' + "Out of office" + '\033[0m')
-                        switchPink()
+						print("Teams presence:\t\t" + '\033[35m' + "Out of office" + '\033[0m')
+						switchPink()
 		elif jsonresult['activity'] == "Presenting":
-                        print("Teams presence:\t\t" + '\033[31m' + "Presenting" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "Presenting" + '\033[0m')
+						switchRed()
 		elif jsonresult['activity'] == "UrgentInterruptionsOnly":
-                        print("Teams presence:\t\t" + '\033[31m' + "Urgent interruptions only" + '\033[0m')
-                        switchRed()
+						print("Teams presence:\t\t" + '\033[31m' + "Urgent interruptions only" + '\033[0m')
+						switchRed()
 		else:
 			print("Teams presence:\t\t" + "Unknown")
 			switchBlue()
