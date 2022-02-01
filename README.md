@@ -14,10 +14,9 @@ Originally from https://github.com/maxi07/Teams-Presence, forked to work with a 
 - No longer flashes LEDs on failure
 - Pink is mapped to off, as I only have green/orange/red colors
 - Removed update checking
+- Removed check for running as root, as no longer need it
 
 # Original README (images removed)
-
-
 [![PyPI license](https://img.shields.io/pypi/l/ansicolortags.svg)](https://pypi.python.org/pypi/ansicolortags/)
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/maxi07/Teams-Presence)
 ![GitHub repo size](https://img.shields.io/github/repo-size/maxi07/Teams-Presence)

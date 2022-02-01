@@ -26,11 +26,6 @@ def printblue(msg):
 def printblink(msg):
 	print('\033[5m' + str(msg) + '\033[0m')
 
-import os
-if not os.geteuid() == 0:
-	printerror("Please run this script with sudo.")
-	exit(2)
-
 print("Welcome to Microsoft Teams presence for Pi!")
 print("Loading modules...")
 
